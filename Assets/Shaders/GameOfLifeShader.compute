@@ -1,0 +1,65 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+struct Cell {
+  int isAlive;
+};
+
+RWStructuredBuffer<Cell> currentGeneration;
+RWStructuredBuffer<Cell> nextGeneration;
+
+int mapWidth;
+int mapHeight;
+int mapSize;
+
+int GetFlatIndex(int row, int col) {
+  if (row < 0 || row >= mapHeight || col < 0 || col >= mapWidth) {
+    return -1;
+  }
+  return (row * mapWidth) + col;
+}
+
+int GetIsNeighborAlive(int currentRow, int currentCol, int rowMov, int colMov) {
+  int neighborIndex = GetFlatIndex(currentRow + rowMov, currentCol + colMov);
+  if (neighborIndex < 0 || neighborIndex >= mapSize) {
+    return 0;
+  }
+  if (currentGeneration[neighborIndex].isAlive == 1) {
+    return 1;
+  }
+  return 0;
+}
+
+[numthreads(8, 8, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+  int cellIndex = GetFlatIndex(id.y, id.x);
+  if (cellIndex >= mapSize) {
+    return;
+  }
+
+  int numNeighborsAlive = 0;
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, 0, 1);
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, 0, -1);
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, 1, 0);
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, -1, 0);
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, 1, 1);
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, -1, -1);
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, 1, -1);
+  numNeighborsAlive += GetIsNeighborAlive(id.x, id.y, -1, 1);
+  
+  int cellStatus = currentGeneration[cellIndex].isAlive;
+  if (cellStatus == 1) {
+    if (numNeighborsAlive < 2 || numNeighborsAlive >= 4) {
+      // die
+      cellStatus = 0;
+    }
+  } else {
+    if (numNeighborsAlive == 3) {
+      // alive
+      cellStatus = 1;
+    }
+  }
+
+  nextGeneration[cellIndex].isAlive = cellStatus;
+}
